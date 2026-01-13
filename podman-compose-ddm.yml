@@ -1,0 +1,87 @@
+version: '1.0'
+
+# example how podman compose file can look like.
+# please modify passwords for actual use.
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n-ddm
+    environment:
+      - N8N_HOST=0.0.0.0
+      - N8N_PORT=5678
+      - WEBHOOK_URL=http://localhost:5678
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=postgres
+      - DB_POSTGRESDB_USER=n8n
+      - DB_POSTGRESDB_PASSWORD=n8n_secure_password
+      - DB_POSTGRESDB_DATABASE=n8n_db
+      - GENERIC_TIMEZONE=Europe/Brussels
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_storage:/home/node/.n8n
+      - ./local_documents:/home/node/documents:ro
+    depends_on:
+      - postgres
+    networks:
+      - ddm_network
+    restart: unless-stopped
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: postgres-ddm
+    environment:
+      POSTGRES_USER: n8n
+      POSTGRES_PASSWORD: n8n_secure_password
+      POSTGRES_DB: n8n_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_storage:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - ddm_network
+    restart: unless-stopped
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ollama-ddm
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_storage:/root/.ollama
+    environment:
+      - OLLAMA_MODELS=/root/.ollama/models
+    networks:
+      - ddm_network
+    restart: unless-stopped
+    # For GPU acceleration, add:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-ddm
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    networks:
+      - ddm_network
+    restart: unless-stopped
+
+volumes:
+  n8n_storage:
+  postgres_storage:
+  ollama_storage:
+  qdrant_storage:
+
+networks:
+  ddm_network:
+    driver: bridge
